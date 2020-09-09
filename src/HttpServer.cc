@@ -43,7 +43,7 @@ void HttpServer::onConnection(const TcpConnectionPtr conn) {
 }
 
 void HttpServer::onMessage(const TcpConnectionPtr conn, Buffer &buf) {
-    printf("messageCb\n");
+    printf("messageCb buf size = %ld\n", buf.size());
     HttpParser httpParser(m_homeDir, buf);
     httpret data = httpParser.process();
     if (data.iovlen > 0) {

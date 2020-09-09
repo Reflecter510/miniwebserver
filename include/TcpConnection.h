@@ -46,7 +46,7 @@ public:
 
 private:
     enum StateE { kConnecting, kConnected, kDisconnected, };
-    static const size_t READ_BUFFER_SIZE = 512; //FIXME 修改为用户可自定义缓存大小
+    static const size_t READ_BUFFER_SIZE = 1024; //FIXME 修改为用户可自定义缓存大小
 private:
     void setState(StateE s);
     void handleRead();

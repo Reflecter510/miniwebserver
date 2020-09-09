@@ -26,6 +26,7 @@ const char* HttpParser::error_404_title = "Not Found";
 const char* HttpParser::error_404_form = "The requested file was not found on this server.\n";
 const char* HttpParser::error_500_title = "Internal Error";
 const char* HttpParser::error_500_form = "There was an unusual problem serving the requested file.\n";
+const char* HttpParser::error_unknown = "Unkonwn Error";
 
 HttpParser::HttpParser(char *homeDir, Buffer &readBuf)
     : m_homeDir(homeDir),
@@ -68,7 +69,9 @@ struct httpret HttpParser::process() {
 HttpParser::HTTP_CODE HttpParser::processRead() {
     LINE_STATUS lineStatus = LINE_OK;
     HTTP_CODE ret = NO_REQUEST;
+
     while (m_checkState == CHECK_STATE_CONTENT || (lineStatus = parseLine()) == LINE_OK) {
+
         switch (m_checkState) {
             case CHECK_STATE_REQUESTLINE:
                 ret = parseRequestLine();
@@ -96,6 +99,8 @@ HttpParser::HTTP_CODE HttpParser::processRead() {
                 return INTERNAL_ERROR;
         }
     }
+
+    printf("SYS_DEBUG processRead m_lineStart = %d, m_lineEnd = %d\n",m_lineStart, m_lineEnd);
     return NO_REQUEST;
 }
 
@@ -122,7 +127,8 @@ bool HttpParser::processWrite(HTTP_CODE httpCode) {
             m_title = error_500_title;
             strncpy(m_form, error_500_form, strlen(error_500_form));
         default:
-            printf("SYS_DEBUG HttpParser::processWrite\n");
+            m_title = error_unknown;
+            printf("SYS_DEBUG Error in HttpParser::processWrite httpCode=%d\n", httpCode);
     }
     bool ret = addStatusLine() && addHeaders();
     addResponse();
@@ -132,10 +138,12 @@ bool HttpParser::processWrite(HTTP_CODE httpCode) {
 
 HttpParser::LINE_STATUS HttpParser::parseLine() {
     size_t crlf = m_readBuf.findCRLF(m_lineStart);
-    if (crlf == m_readBuf.size()) {
+    if (m_lineStart >= m_readBuf.size()) {
+        printf("SYS_DEBUG parseLine m_readBuf.size()=%ld\n",m_readBuf.size());
         return LINE_OPEN;
     }
     else {
+
         m_lineEnd = crlf;
         return LINE_OK;
     }
@@ -179,9 +187,12 @@ HttpParser::HTTP_CODE HttpParser::parseRequestLine() {
 }
 
 HttpParser::HTTP_CODE HttpParser::parseHeaders() {
+
     //headers部分结束，根据content的长度判断有没有content部分
-    if (m_lineStart == m_lineEnd) {
+    if (m_lineStart >= m_lineEnd) {
+
         m_lineStart = m_lineEnd + 2;
+
         if (m_contentLen != 0) {
             m_contentLen = CHECK_STATE_CONTENT;
             return NO_REQUEST;
@@ -202,6 +213,7 @@ HttpParser::HTTP_CODE HttpParser::parseHeaders() {
         else if (header.compare(0, 15, "Content-Length:") == 0) {
             size_t space = m_readBuf.skipSpace(m_lineStart + 15);
             m_contentLen = std::stoi(header.substr(space - m_lineStart, header.length() - (space - m_lineStart)));
+            printf("SYS_DEBUG parseHeader m_contentLen = %d\n", m_contentLen);
         }
         else if (header.compare(0, 5, "Host:") == 0) {
             size_t space = m_readBuf.skipSpace(m_lineStart + 5);
@@ -211,6 +223,16 @@ HttpParser::HTTP_CODE HttpParser::parseHeaders() {
             printf("only support connection, content-length, host headers now, and unknow header %s\n", header.c_str());
         }
         m_lineStart = m_lineEnd + 2;
+
+        if(m_lineEnd == m_readBuf.size()){
+            if (m_contentLen != 0) {
+                m_contentLen = CHECK_STATE_CONTENT;
+                return NO_REQUEST;
+            }
+            else {
+                return GET_REQUEST;
+            }
+        }
         return NO_REQUEST;
     }
 }
@@ -225,6 +247,7 @@ HttpParser::HTTP_CODE HttpParser::parseContent() {
 }
 
 HttpParser::HTTP_CODE HttpParser::doRequest() {
+
     //将已解析的http报文移出缓冲区
     m_readBuf.takeOut(m_lineStart);
     strncpy(m_readFile, m_homeDir, FILENAME_LEN);
@@ -232,10 +255,12 @@ HttpParser::HTTP_CODE HttpParser::doRequest() {
     strncpy(m_readFile + len, m_url.c_str(), FILENAME_LEN - len - 1);
     if (stat(m_readFile, &m_fileStat) < 0) {
         char strerr[64];
-        printf("SYS_INFO HttpParser::deRequest %s\n", strerror_r(errno, strerr, sizeof strerr));
+        printf("SYS_INFO HttpParser::doRequest %s\n", strerror_r(errno, strerr, sizeof strerr));
+        printf("SYS_INFO HttpParser::doRequest m_homeDir = %s , m_url.c_str() = %s\n", m_homeDir, m_url.c_str());
         return NO_RESOURCE;
     }
     if (!(m_fileStat.st_mode & S_IROTH)) {
+        printf("SYS_INFO HttpParser::doRequest FORBIDDEN_REQUEST");
         return FORBIDDEN_REQUEST;
     }
     if (!S_ISREG(m_fileStat.st_mode)) {

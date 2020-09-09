@@ -100,6 +100,7 @@ private:
     static const char* error_404_form;
     static const char* error_500_title;
     static const char* error_500_form;
+    static const char* error_unknown;
 
     CHECK_STATE m_checkState;
     METHOD m_method;

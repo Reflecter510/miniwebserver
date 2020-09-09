@@ -131,8 +131,9 @@
 void test7() {
     miniws::InetAddr localAddr("127.0.0.1", 9983);
     std::string serverName = "testServer";
-    std::string homeDir = "./home";
-    miniws::HttpServer httpServer(serverName, localAddr, homeDir, 4);
+    std::string homeDir = "./webHome";
+    //std::string homeDir = "/mnt/d/Documents/HexoBlog/public";
+    miniws::HttpServer httpServer(serverName, localAddr, homeDir, 4, 100);
     httpServer.start();
 }
 
